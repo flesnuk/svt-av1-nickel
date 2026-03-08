@@ -858,6 +858,14 @@ EbErrorType svt_av1_verify_settings(SequenceControlSet *scs) {
         return_error = EB_ErrorBadParameter;
     }
 
+    if (config->enable_tf > 3) {
+        SVT_ERROR("Temporal filtering must be between 0 and 3\n");
+        return_error = EB_ErrorBadParameter;
+    }
+    if (config->enable_tf == 3)
+        SVT_WARN("enable-tf 3 forces temporal filtering on all frames and tend to be very aggressive. "
+            "Proceed with caution.\n");
+
     if (config->variance_boost_curve > 3) {
         SVT_ERROR("Variance Boost curve must be between 0 and 3\n");
         return_error = EB_ErrorBadParameter;
@@ -1361,12 +1369,23 @@ void svt_av1_print_lib_params(SequenceControlSet *scs) {
                  config->luminance_qp_bias);
 
         switch (config->enable_tf) {
-        case 1:
-            SVT_INFO("SVT [config]: Temporal Filtering / keyframe strength \t\t\t: %d / %d \n",
-                     config->tf_strength,
-                     config->kf_tf_strength);
-            break;
-        case 2: SVT_INFO("SVT [config]: Temporal Filtering strength\t\t\t\t\t: auto\n"); break;
+        case 0: SVT_INFO("SVT [config]: temporal filtering / strength \t\t\t\t: off / -\n"); break;
+        case 1: SVT_INFO("SVT [config]: temporal filtering / strength \t\t\t\t: on / %s\n",
+                         config->tf_strength == 0          ? "lowest (0)"
+                                : config->tf_strength == 1 ? "low (1)"
+                                : config->tf_strength == 2 ? "medium (2)"
+                                : config->tf_strength == 3 ? "high (3)"
+                                : config->tf_strength == 4 ? "highest (4)"
+                                : "unknown"); break;
+        case 2: SVT_INFO("SVT [config]: temporal filtering / strength \t\t\t\t: auto / -\n"); break;
+        case 3: SVT_INFO("SVT [config]: temporal filtering / strength \t\t\t\t: full / %s\n",
+                         config->tf_strength == 0          ? "lowest (0)"
+                                : config->tf_strength == 1 ? "low (1)"
+                                : config->tf_strength == 2 ? "medium (2)"
+                                : config->tf_strength == 3 ? "high (3)"
+                                : config->tf_strength == 4 ? "highest (4)"
+                                : "unknown"); break;
+        default: break;
         }
 
         SVT_INFO("SVT [config]: QP scale compress strength \t\t\t\t\t: %.2f\n", config->qp_scale_compress_strength);
