@@ -1851,21 +1851,21 @@ int get_version(int argc, char *const argv[], bool color) {
 #endif
     if (find_token(argc, argv, VERSION_TOKEN, NULL))
         return 0;
-    printf("SVT-AV1-Tritium %s (" BUILD_TYPE_STRING ")\n", svt_av1_get_version());
+    printf("SVT-AV1-Nickel %s (" BUILD_TYPE_STRING ")\n", svt_av1_get_version());
 #if defined(_WIN64) || defined(_MSC_VER) || defined(_WIN32)
-    printf("Tritium Release: %s\n", svt_hdr_get_version());
+    printf("Nickel Release: %s\n", svt_hdr_get_version());
 #else
     if (strcmp(svt_hdr_get_version(), "N/A")) {
         if (color) {
-            printf("Tritium Release: \x1b[32m%s\x1b[0m\n", svt_hdr_get_version());
+            printf("Nickel Release: \x1b[32m%s\x1b[0m\n", svt_hdr_get_version());
         } else {
-            printf("Tritium Release: %s\n", svt_hdr_get_version());
+            printf("Nickel Release: %s\n", svt_hdr_get_version());
         }
     } else {
         if (color) {
-            printf("Tritium Release: \x1b[38;5;248m%s\x1b[0m\n", svt_hdr_get_version());
+            printf("Nickel Release: \x1b[38;5;248m%s\x1b[0m\n", svt_hdr_get_version());
         } else {
-            printf("Tritium Release: %s\n", svt_hdr_get_version());
+            printf("Nickel Release: %s\n", svt_hdr_get_version());
         }
     }
 #endif
