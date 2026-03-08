@@ -3854,6 +3854,10 @@ static void set_param_based_on_input(SequenceControlSet *scs)
     if (scs->static_config.variance_boost_strength >= 4) {
         SVT_WARN("Aggressive Variance Boost strength used. This is a curve that's only useful under specific situations. Use with caution!\n");
     }
+    if (scs->static_config.enable_dlf_flag != 0 && scs->static_config.alt_dlf > 1 && !(scs->static_config.pred_structure == LOW_DELAY)) {
+        SVT_WARN("DLF level is set to 1, or full DLF decision, when alt-dlf is >= 2\n");
+        scs->static_config.enable_dlf_flag = 3;
+    }
     if (scs->static_config.max_tx_size == 32 && scs->static_config.qp >= 25 && scs->static_config.tune != 3) {
         SVT_WARN("Restricting transform sizes to a max of 32x32 might reduce coding efficiency at low to medium fidelity settings. Use with caution!\n");
     }
@@ -4559,6 +4563,9 @@ static void copy_api_from_app(SequenceControlSet *scs, EbSvtAv1EncConfiguration 
 
     // Noise adaptive filtering
     scs->static_config.noise_adaptive_filtering = config_struct->noise_adaptive_filtering;
+
+    // alt dlf
+    scs->static_config.alt_dlf = config_struct->alt_dlf;
 
     // CDEF scaling
     scs->static_config.cdef_scaling = config_struct->cdef_scaling;

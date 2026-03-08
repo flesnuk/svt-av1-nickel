@@ -1116,6 +1116,14 @@ typedef struct EbSvtAv1EncConfiguration {
     QualityZone* parsed_zones;
     uint16_t num_zones;
 
+    /**
+     * @brief Enable alternative DLF biases
+     * 0: disabled
+     * 1-3: enabled
+     * Default is 0
+     */
+    uint8_t alt_dlf;
+
     /*Add 128 Byte Padding to Struct to avoid changing the size of the public configuration struct*/
     uint8_t padding[128
         /* SVT-AV1-HDR additions */
@@ -1127,6 +1135,7 @@ typedef struct EbSvtAv1EncConfiguration {
         - (sizeof(char*) * 1)
         - (sizeof(QualityZone*) * 1)
         - (sizeof(uint16_t) * 1)
+        - (sizeof(uint8_t) * 1)
     ];
     // clang-format on
 } EbSvtAv1EncConfiguration;
