@@ -476,9 +476,14 @@ static EbErrorType init_ffms2(EbConfig *app_cfg) {
         app_cfg->config.frame_rate_denominator = props->FPSDenominator;
     }
 
-    app_cfg->config.matrix_coefficients = test_frame->ColorSpace;
-    app_cfg->config.color_primaries = test_frame->ColorPrimaries;
-    app_cfg->config.transfer_characteristics = test_frame->TransferCharateristics;
+    // If color parameters weren't specificed, set it from frame's color metadata
+    if (app_cfg->config.matrix_coefficients == EB_CICP_MC_UNSPECIFIED &&
+        app_cfg->config.color_primaries == EB_CICP_CP_UNSPECIFIED &&
+        app_cfg->config.transfer_characteristics == EB_CICP_TC_UNSPECIFIED) {
+        app_cfg->config.matrix_coefficients = test_frame->ColorSpace;
+        app_cfg->config.color_primaries = test_frame->ColorPrimaries;
+        app_cfg->config.transfer_characteristics = test_frame->TransferCharateristics;
+    }
 
     if (test_frame->ColorRange == 2) {
         app_cfg->config.color_range = EB_CR_FULL_RANGE;
