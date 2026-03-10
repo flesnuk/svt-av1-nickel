@@ -49,12 +49,12 @@ void write_ivf_stream_header(EbConfig *app_cfg, int32_t length) {
     fwrite(header, 1, IVF_STREAM_HEADER_SIZE, app_cfg->bitstream_file);
 }
 
-void write_ivf_frame_header(EbConfig *app_cfg, uint32_t byte_count) {
+void write_ivf_frame_header(EbConfig *app_cfg, uint32_t byte_count, uint64_t pts) {
     char header[IVF_FRAME_HEADER_SIZE];
 
     mem_put_le32(&header[0], (int32_t)byte_count);
-    mem_put_le32(&header[4], (int32_t)(app_cfg->ivf_count & 0xFFFFFFFF));
-    mem_put_le32(&header[8], (int32_t)(app_cfg->ivf_count >> 32));
+    mem_put_le32(&header[4], (int32_t)(pts & 0xFFFFFFFF));
+    mem_put_le32(&header[8], (int32_t)(pts >> 32));
 
     app_cfg->ivf_count++;
     fwrite(header, 1, IVF_FRAME_HEADER_SIZE, app_cfg->bitstream_file);

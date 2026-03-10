@@ -640,7 +640,9 @@ void process_input_buffer(EncChannel *channel) {
             if (keep_running == 0 && !app_cfg->stop_encoder)
                 app_cfg->stop_encoder = true;
             // Fill in Buffers Header control data
-            header_ptr->pts      = app_cfg->processed_frame_count - 1;
+            if (!app_cfg->use_ffms2) {
+                header_ptr->pts      = app_cfg->processed_frame_count - 1;
+            }
             header_ptr->pic_type = is_forced_keyframe(app_cfg, header_ptr->pts) ? EB_AV1_KEY_PICTURE
                                                                                 : header_ptr->pic_type;
             header_ptr->flags    = 0;
@@ -886,6 +888,14 @@ static void ffms2_read_input_frames(EbConfig *app_cfg, uint8_t is_16bit, EbBuffe
         return;
     }
 
+    FFMS_Track *track = FFMS_GetTrackFromIndex((FFMS_Index*)app_cfg->ffms_index, app_cfg->ffms_track_num);
+    if (track) {
+        const FFMS_FrameInfo *info = FFMS_GetFrameInfo(track, frame_num);
+        if (info) {
+            header_ptr->pts = info->PTS;
+        }
+    }
+
     const uint32_t width = app_cfg->input_padded_width;
     const uint32_t height = app_cfg->input_padded_height;
     const uint32_t chroma_width = width >> 1;
@@ -933,6 +943,15 @@ static void ffms2_buffered_read_input_frames(EbConfig *app_cfg, uint8_t is_16bit
     const uint32_t height = app_cfg->input_padded_height;
     const uint32_t chroma_width = width >> 1;
     const uint32_t chroma_height = height >> 1;
+    int frame_num = app_cfg->processed_frame_count;
+
+    FFMS_Track *track = FFMS_GetTrackFromIndex((FFMS_Index*)app_cfg->ffms_index, app_cfg->ffms_track_num);
+    if (track) {
+        const FFMS_FrameInfo *info = FFMS_GetFrameInfo(track, frame_num);
+        if (info) {
+            header_ptr->pts = info->PTS;
+        }
+    }
 
     // 10-bit = 2 bytes per sample
     const size_t luma_size = width * height * 2;
@@ -1132,7 +1151,7 @@ void process_output_stream_buffer(EncChannel *channel, EncApp *enc_app, int32_t 
                         write_ivf_stream_header(
                             app_cfg, app_cfg->frames_to_be_encoded == -1 ? 0 : (int32_t)app_cfg->frames_to_be_encoded);
                     }
-                    write_ivf_frame_header(app_cfg, header_ptr->n_filled_len);
+                    write_ivf_frame_header(app_cfg, header_ptr->n_filled_len, header_ptr->pts);
                     fwrite(header_ptr->p_buffer, 1, header_ptr->n_filled_len, stream_file);
                 }
 
