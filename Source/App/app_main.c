@@ -29,6 +29,7 @@
 #include "app_config.h"
 #include "app_context.h"
 #include "svt_time.h"
+#include "app_output_ivf.h"
 #include <fcntl.h>
 #ifdef _WIN32
 #include <windows.h>
@@ -212,6 +213,67 @@ static EbErrorType enc_context_ctor(EncApp* enc_app, EncContext* enc_context, in
         if (c->return_error == EB_ErrorNone) {
             c->return_error = init_encoder(app_cfg);
         }
+        // --- Open the bitstream output file (deferred from set_cfg_stream_file) ---
+        // set_cfg_stream_file only stored bitstream_file_path without opening the file,
+        // so that --resume can choose the right open mode here.
+        if (c->return_error == EB_ErrorNone && app_cfg->bitstream_file_path
+            && app_cfg->bitstream_file != stdout) {
+
+            if (app_cfg->resume) {
+                // Try to open the existing partial .ivf for reading+writing (no truncate)
+                FOPEN(app_cfg->bitstream_file, app_cfg->bitstream_file_path, "r+b");
+
+                if (app_cfg->bitstream_file) {
+                    // File exists: scan how many complete frames are already in it
+                    if (ivf_count_frames_and_seek(app_cfg)) {
+                        // Successfully parsed – resume_frame_count and file position are set
+                    } else {
+                        fprintf(stderr, "Warning: --resume: existing file has no valid IVF header, starting fresh.\n");
+                        fclose(app_cfg->bitstream_file);
+                        FOPEN(app_cfg->bitstream_file, app_cfg->bitstream_file_path, "wb");
+                        app_cfg->resume_frame_count = 0;
+                    }
+                } else {
+                    // File doesn't exist yet – first run, open fresh
+                    FOPEN(app_cfg->bitstream_file, app_cfg->bitstream_file_path, "wb");
+                    app_cfg->resume_frame_count = 0;
+                }
+
+                if (!app_cfg->bitstream_file) {
+                    fprintf(stderr, "Error: cannot open output file '%s'.\n", app_cfg->bitstream_file_path);
+                    c->return_error = EB_ErrorBadParameter;
+                    return_error    = c->return_error;
+                } else if (app_cfg->resume_frame_count > 0) {
+                    // Skip that many frames of input
+                    // frames_to_be_skipped tells the FFMS2 skip path how far to advance
+                    // processed_frame_count (it's an absolute frame index into the source).
+                    app_cfg->frames_to_be_skipped = app_cfg->resume_frame_count;
+                    app_cfg->need_to_skip         = true;
+
+                    // NOTE: do NOT subtract from frames_to_be_encoded.
+                    // frames_to_be_encoded is an absolute total (e.g. 2430) and is compared
+                    // against processed_frame_count which will start at resume_frame_count
+                    // after the skip. Subtracting would make the encoder stop too early.
+
+                    // Mark header as already present – don't write another one
+                    app_cfg->ivf_header_written = true;
+
+                    // ivf_count already reflects what was written
+                    app_cfg->ivf_count += (uint64_t)app_cfg->resume_frame_count;
+                }
+            } else {
+                // Normal (non-resume) open: truncate and write from scratch
+                FOPEN(app_cfg->bitstream_file, app_cfg->bitstream_file_path, "wb");
+                if (!app_cfg->bitstream_file) {
+                    fprintf(stderr, "Error: cannot open output file '%s'.\n", app_cfg->bitstream_file_path);
+                    c->return_error = EB_ErrorBadParameter;
+                    return_error    = c->return_error;
+                }
+            }
+        }
+        // --- End bitstream file open ---
+
+
         return_error = (EbErrorType)(return_error | c->return_error);
     } else
         c->active = false;
@@ -341,15 +403,19 @@ static void enc_channel_step(EncChannel* c, EncApp* enc_app, EncContext* enc_con
     EbConfig* app_cfg = c->app_cfg;
 
     if (app_cfg->need_to_skip) {
-        bool skip   = !process_skip(app_cfg, app_cfg->input_buffer_pool);
-        int  next_c = fgetc(app_cfg->input_file);
-        if (!skip && next_c == EOF) {
-            fputs("\n[SVT-Error]: Skipped all available frames!\n", stderr);
-            c->exit_cond_input = APP_ExitConditionFinished;
-            c->active          = false;
-            return;
+        bool skip = !process_skip(app_cfg, app_cfg->input_buffer_pool);
+        // With FFMS2, input_file is NULL – EOF is detected by ffms2_read_input_frames
+        // returning n_filled_len=0, so skip the fgetc probe.
+        if (!app_cfg->use_ffms2) {
+            int next_c = fgetc(app_cfg->input_file);
+            if (!skip && next_c == EOF) {
+                fputs("\n[SVT-Error]: Skipped all available frames!\n", stderr);
+                c->exit_cond_input = APP_ExitConditionFinished;
+                c->active          = false;
+                return;
+            }
+            ungetc(next_c, app_cfg->input_file);
         }
-        ungetc(next_c, app_cfg->input_file);
     }
 
     process_input_buffer(c);

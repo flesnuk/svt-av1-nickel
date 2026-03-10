@@ -134,6 +134,7 @@ typedef struct EbConfig {
     MemMapFile mmap; //memory mapped file handler
     bool       input_file_is_fifo;
     FILE      *bitstream_file;
+    char      *bitstream_file_path; // stored for --resume reopen
     FILE      *recon_file;
     FILE      *error_log_file;
     FILE      *stat_file;
@@ -168,6 +169,12 @@ typedef struct EbConfig {
     uint32_t speed_control_flag;
 
     bool stop_encoder; // to signal CTRL+C Event, need to stop encoding.
+
+    // Resume support
+    bool    resume;              // --resume 1: resume from partial .ivf output
+    int64_t resume_frame_count;  // number of frames already encoded in partial .ivf
+    int64_t resume_last_pts;     // PTS of the last frame found in partial .ivf
+    bool    ivf_header_written;  // true when the IVF stream header has been written (or already exists)
 
     uint64_t processed_frame_count;
     uint64_t processed_byte_count;

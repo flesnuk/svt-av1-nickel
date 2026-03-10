@@ -10,6 +10,7 @@
 */
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 
 #include "app_config.h"
@@ -58,4 +59,82 @@ void write_ivf_frame_header(EbConfig *app_cfg, uint32_t byte_count, uint64_t pts
 
     app_cfg->ivf_count++;
     fwrite(header, 1, IVF_FRAME_HEADER_SIZE, app_cfg->bitstream_file);
+}
+
+/* Read a little-endian 32-bit uint from a byte buffer */
+static uint32_t read_le32(const uint8_t *buf) {
+    return (uint32_t)buf[0] | ((uint32_t)buf[1] << 8) | ((uint32_t)buf[2] << 16) |
+        ((uint32_t)buf[3] << 24);
+}
+
+/* Read a little-endian 64-bit uint from a byte buffer */
+static uint64_t read_le64(const uint8_t *buf) {
+    return (uint64_t)read_le32(buf) | ((uint64_t)read_le32(buf + 4) << 32);
+}
+
+bool ivf_count_frames_and_seek(EbConfig *app_cfg) {
+    FILE *f = app_cfg->bitstream_file;
+    if (!f)
+        return false;
+
+    /* Rewind and validate the IVF stream header */
+    rewind(f);
+
+    uint8_t stream_hdr[IVF_STREAM_HEADER_SIZE];
+    if (fread(stream_hdr, 1, IVF_STREAM_HEADER_SIZE, f) != IVF_STREAM_HEADER_SIZE)
+        return false;
+
+    /* Check the DKIF magic */
+    if (stream_hdr[0] != 'D' || stream_hdr[1] != 'K' || stream_hdr[2] != 'I' || stream_hdr[3] != 'F')
+        return false;
+
+    /* Walk through all frame headers, count frames, track last valid position */
+    int64_t  frame_count  = 0;
+    int64_t  last_pts     = -1;
+    int64_t  last_end_pos = IVF_STREAM_HEADER_SIZE; /* position after last complete frame */
+
+    uint8_t frame_hdr[IVF_FRAME_HEADER_SIZE];
+    for (;;) {
+        /* Remember where this frame header starts */
+        int64_t hdr_pos = ftello(f);
+        if (hdr_pos < 0)
+            break;
+
+        size_t n = fread(frame_hdr, 1, IVF_FRAME_HEADER_SIZE, f);
+        if (n != IVF_FRAME_HEADER_SIZE)
+            break; /* EOF or truncated header – stop here */
+
+        uint32_t frame_size = read_le32(frame_hdr);
+        uint64_t pts        = read_le64(frame_hdr + 4);
+
+        /* Sanity: frame_size of 0 or absurdly large indicates corruption */
+        if (frame_size == 0 || frame_size > 256 * 1024 * 1024)
+            break;
+
+        /* Seek past the frame payload */
+        if (fseeko(f, (int64_t)frame_size, SEEK_CUR) != 0)
+            break;
+
+        /* Verify we landed at expected position (detects truncated payload) */
+        int64_t after = ftello(f);
+        if (after < 0 || after != hdr_pos + IVF_FRAME_HEADER_SIZE + (int64_t)frame_size)
+            break;
+
+        /* This frame is complete */
+        frame_count++;
+        last_pts     = (int64_t)pts;
+        last_end_pos = after;
+    }
+
+    app_cfg->resume_frame_count = frame_count;
+    app_cfg->resume_last_pts    = last_pts;
+
+    /* Seek to the end of the last valid frame so new data is appended */
+    fseeko(f, last_end_pos, SEEK_SET);
+
+    fprintf(stderr, "Resume: found %lld complete frame(s) in existing .ivf (last PTS=%lld). "
+                    "Appending from frame %lld.\n",
+            (long long)frame_count, (long long)last_pts, (long long)frame_count);
+
+    return true;
 }

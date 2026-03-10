@@ -19,4 +19,10 @@
 void write_ivf_stream_header(EbConfig *app_cfg, int32_t length);
 void write_ivf_frame_header(EbConfig *app_cfg, uint32_t byte_count, uint64_t pts);
 
+/* Resume support: read an existing .ivf file, count the number of complete frames,
+ * set app_cfg->resume_frame_count and app_cfg->resume_last_pts, and seek the
+ * file position to the byte right after the last valid frame (ready for appending).
+ * Returns true on success (file had a valid IVF header), false otherwise. */
+bool ivf_count_frames_and_seek(EbConfig *app_cfg);
+
 #endif

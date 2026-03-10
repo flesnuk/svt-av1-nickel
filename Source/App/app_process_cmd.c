@@ -240,8 +240,13 @@ static bool is_forced_keyframe(const EbConfig *app_cfg, uint64_t pts) {
 bool process_skip(EbConfig *app_cfg, EbBufferHeaderType *header_ptr) {
     const bool is_16bit = app_cfg->config.encoder_bit_depth > 8;
     if (app_cfg->use_ffms2) {
-        // not implemented yet
-        app_cfg->need_to_skip = false;
+        // FFMS2 supports random access by frame index.
+        // ffms2_read_input_frames() uses app_cfg->processed_frame_count as the
+        // frame index, so we simply advance the counter to the first un-encoded
+        // frame and let the normal read loop start from there.
+        app_cfg->processed_frame_count += (uint64_t)app_cfg->frames_to_be_skipped;
+        app_cfg->frames_encoded         = (int32_t)app_cfg->processed_frame_count;
+        app_cfg->need_to_skip           = false;
         return true;
     }
     for (int64_t i = 0; i < app_cfg->frames_to_be_skipped; i++) {
@@ -1147,9 +1152,11 @@ void process_output_stream_buffer(EncChannel *channel, EncApp *enc_app, int32_t 
 
                 // Write Stream Data to file
                 if (stream_file) {
-                    if (app_cfg->performance_context.frame_count == 1 && !(flags & EB_BUFFERFLAG_IS_ALT_REF)) {
+                    if (app_cfg->performance_context.frame_count == 1 && !(flags & EB_BUFFERFLAG_IS_ALT_REF)
+                        && !app_cfg->ivf_header_written) {
                         write_ivf_stream_header(
                             app_cfg, app_cfg->frames_to_be_encoded == -1 ? 0 : (int32_t)app_cfg->frames_to_be_encoded);
+                        app_cfg->ivf_header_written = true;
                     }
                     write_ivf_frame_header(app_cfg, header_ptr->n_filled_len, header_ptr->pts);
                     fwrite(header_ptr->p_buffer, 1, header_ptr->n_filled_len, stream_file);

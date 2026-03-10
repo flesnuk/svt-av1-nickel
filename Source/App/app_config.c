@@ -1,4 +1,4 @@
-﻿/*
+/*
 * Copyright(c) 2019 Intel Corporation
 *
 * This source code is subject to the terms of the BSD 3-Clause Clear License and
@@ -231,6 +231,7 @@
 #define AUTO_TILING_TOKEN "--auto-tiling"
 #define ZONES_TOKEN "--zones"
 #define ALT_DLF_TOKEN "--enable-alt-dlf"
+#define RESUME_TOKEN "--resume"
 
 static EbErrorType validate_error(EbErrorType err, const char *token, const char *value) {
     switch (err) {
@@ -420,14 +421,27 @@ static EbErrorType set_allow_mmap_file(EbConfig *cfg, const char *token, const c
     return EB_ErrorNone;
 }
 static EbErrorType set_cfg_stream_file(EbConfig *cfg, const char *token, const char *value) {
+    (void)token;
     if (!strcmp(value, "stdout") || !strcmp(value, "-")) {
-        if (cfg->bitstream_file && cfg->bitstream_file != stdout) {
+        if (cfg->bitstream_file && cfg->bitstream_file != stdout)
             fclose(cfg->bitstream_file);
-        }
         cfg->bitstream_file = stdout;
+        free(cfg->bitstream_file_path);
+        cfg->bitstream_file_path = NULL;
         return EB_ErrorNone;
     }
-    return open_file(&cfg->bitstream_file, token, value, "wb");
+    // Only store the path here. The file is opened in enc_context_ctor after
+    // all options are parsed, so --resume can choose "r+b" vs "wb" correctly.
+    // Opening here in "wb" would truncate the partial .ivf before we can scan it.
+    if (cfg->bitstream_file && cfg->bitstream_file != stdout) {
+        fclose(cfg->bitstream_file);
+        cfg->bitstream_file = NULL;
+    }
+    free(cfg->bitstream_file_path);
+    cfg->bitstream_file_path = strdup(value);
+    if (!cfg->bitstream_file_path)
+        return EB_ErrorInsufficientResources;
+    return EB_ErrorNone;
 }
 static EbErrorType set_cfg_error_file(EbConfig *cfg, const char *token, const char *value) {
     if (!strcmp(value, "stderr")) {
@@ -513,6 +527,14 @@ static EbErrorType set_cfg_frames_to_be_skipped(EbConfig *cfg, const char *token
     if (cfg->frames_to_be_skipped > 0)
         cfg->need_to_skip = true;
     return ret;
+}
+static EbErrorType set_cfg_resume(EbConfig *cfg, const char *token, const char *value) {
+    (void)token;
+    switch (value ? *value : '1') {
+    case '0': cfg->resume = false; break;
+    default:  cfg->resume = true;  break;
+    }
+    return EB_ErrorNone;
 }
 static EbErrorType set_buffered_input(EbConfig *cfg, const char *token, const char *value) {
     return str_to_int(token, value, &cfg->buffered_input);
@@ -739,6 +761,8 @@ ConfigDescription config_entry_options[] = {
      "a quality tradeoff, default is 4 [-3-13]"},
 
     {SVTAV1_PARAMS, "colon separated list of key=value pairs of parameters with keys based on config file options"},
+
+    {RESUME_TOKEN, "Resume encoding from an existing partial .ivf output file (only with FFMS2 input). Default is 0 [0-1]"},
 
     {NULL, NULL}};
 
@@ -1104,6 +1128,9 @@ ConfigEntry config_entry[] = {
     {PRESET_TOKEN, "EncoderMode", set_cfg_generic_token},
     {SVTAV1_PARAMS, "SvtAv1Params", parse_svtav1_params},
 
+    // Resume support
+    {RESUME_TOKEN, "Resume", set_cfg_resume},
+
     // Encoder Global Options
     //   Picture Dimensions
     {WIDTH_TOKEN, "SourceWidth", set_cfg_generic_token},
@@ -1449,6 +1476,7 @@ void svt_config_dtor(EbConfig *app_cfg) {
     free(app_cfg->forced_keyframes.frames);
 
     free((void *)app_cfg->stats);
+    free(app_cfg->bitstream_file_path);
     free(app_cfg);
     return;
 }
