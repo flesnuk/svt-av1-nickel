@@ -2626,6 +2626,16 @@ EbErrorType read_command_line(int32_t argc, char *const argv[], EncChannel *chan
             if (channel->return_error == EB_ErrorNone && !n_specified)
                 app_cfg->frames_to_be_encoded = input_frame_count - app_cfg->frames_to_be_skipped;
 
+            // For FFMS2, process_skip() advances processed_frame_count by frames_to_be_skipped
+            // (random-access seek, no physical frame reads) instead of leaving it at 0.
+            // frames_to_be_encoded is the absolute stop condition: encoding stops when
+            // processed_frame_count == frames_to_be_encoded.  When --frames M is explicitly
+            // given we therefore need to add the skip offset so the encoder runs for exactly
+            // M output frames.  (When --frames is not given, frames_to_be_encoded stays -1
+            // and EOF is detected by ffms2_read_input_frames returning n_filled_len=0.)
+            if (app_cfg->use_ffms2 && app_cfg->frames_to_be_skipped > 0 && n_specified)
+                app_cfg->frames_to_be_encoded += app_cfg->frames_to_be_skipped;
+
             // For pipe input it is fine if we have -1 here (we will update on end of stream)
             if (app_cfg->frames_to_be_encoded == -1 && app_cfg->input_file != stdin && !app_cfg->input_file_is_fifo && !app_cfg->use_ffms2) {
                 fprintf(app_cfg->error_log_file, "Error: Input yuv does not contain enough frames \n");
