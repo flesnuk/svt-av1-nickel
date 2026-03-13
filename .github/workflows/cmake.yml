@@ -40,8 +40,6 @@ jobs:
         mkdir -p third_party/ffms2/lib
         cp ffms2-5.0-msvc/include/ffms.h third_party/ffms2/include/
         cp ffms2-5.0-msvc/x64/ffms2.lib third_party/ffms2/lib/
-        mkdir -p Bin/Release
-        cp ffms2-5.0-msvc/x64/ffms2.dll Bin/Release/
       shell: bash
     - name: Windows build
       if: contains( matrix.config.os, 'windows' )
