@@ -2184,7 +2184,7 @@ EB_API EbErrorType svt_av1_enc_deinit_handle(
     return EB_ErrorInvalidComponent;
 }
 
-// Sets the default intra period the closest possible to 10 seconds without breaking the minigop
+// Sets the default intra period the closest possible to 5 seconds without breaking the minigop
 static int32_t compute_default_intra_period(
     SequenceControlSet       *scs){
     int32_t intra_period               = 0;
@@ -2200,8 +2200,8 @@ static int32_t compute_default_intra_period(
         mini_gop_size = 16;
     }
 
-    /* Use a 10-sec GOP by default (SVT-AV1-HDR) */
-    intra_period                       = (((int)(fps * 10 + mini_gop_size - 1) / mini_gop_size) * (mini_gop_size));
+    /* Use a 5-sec GOP by default (SVT-AV1-HDR) */
+    intra_period                       = (((int)(fps * 5 + mini_gop_size - 1) / mini_gop_size) * (mini_gop_size));
 
     // Cap intra period to the nearest one that has at least 300 frames that doesn't break the minigop
     // (to avoid gops that are too big and could cause seeking issues with some players)

@@ -918,7 +918,7 @@ ConfigDescription config_entry_2p[] = {
 
 ConfigDescription config_entry_intra_refresh[] = {
     {KEYINT_TOKEN,
-     "Max GOP size (frames), default is -2 [-2: ~10 seconds (up to 305 frames), -1: \"infinite\" and only applicable for "
+     "Max GOP size (frames), default is -2 [-2: ~5 seconds (up to 305 frames), -1: \"infinite\" and only applicable for "
      "CRF, 0: same as -1]"},
     {MIN_KEYINT_TOKEN,
      "Min GOP size (frames), default is -1 [-1: multiple of the mini-gop length (automatic), "
