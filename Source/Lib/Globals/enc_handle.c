@@ -4027,9 +4027,6 @@ static void set_param_based_on_input(SequenceControlSet *scs)
     if (scs->static_config.encoder_bit_depth < 10)
         scs->enable_hbd_mode_decision = 0;
 
-    // Throws a warning when scene change is on, as the feature is not optimal and may produce false detections
-    if (scs->static_config.scene_change_detection == 1)
-        SVT_WARN("SCD has been optimized on SVT-AV1-Essential defaults. Accuracy cannot be guaranteed inside SVT-AV1-Nickel.\n");
     // MRP level
     uint8_t mrp_level;
     if (scs->static_config.rtc) {
@@ -4236,21 +4233,17 @@ static void copy_api_from_app(SequenceControlSet *scs, EbSvtAv1EncConfiguration 
             }
         }
         if (scs->static_config.auto_tiling) {
-            if (scs->max_input_luma_width >= 3840 && scs->max_input_luma_height >= 2160) {
-                scs->static_config.tile_rows = 0;
-                scs->static_config.tile_columns = 2;
+            uint32_t max_dim = scs->max_input_luma_width > scs->max_input_luma_height ?
+                               scs->max_input_luma_width : scs->max_input_luma_height;
+            bool is_vertical = scs->max_input_luma_height > scs->max_input_luma_width;
+
+            if (max_dim >= 3840) {
+                scs->static_config.tile_rows = is_vertical ? 2 : 0;
+                scs->static_config.tile_columns = is_vertical ? 0 : 2;
             }
-            else if (scs->max_input_luma_width >= 2160 && scs->max_input_luma_height >= 3840) {
-                scs->static_config.tile_rows = 2;
-                scs->static_config.tile_columns = 0;
-            }
-            else if (scs->max_input_luma_width >= 1920 && scs->max_input_luma_height >= 1080) {
-                scs->static_config.tile_rows = 0;
-                scs->static_config.tile_columns = 1;
-            }
-            else if (scs->max_input_luma_width >= 1080 && scs->max_input_luma_height >= 1920) {
-                scs->static_config.tile_rows = 1;
-                scs->static_config.tile_columns = 0;
+            else if (max_dim >= 1920) {
+                scs->static_config.tile_rows = is_vertical ? 1 : 0;
+                scs->static_config.tile_columns = is_vertical ? 0 : 1;
             }
         }
     }
@@ -4405,7 +4398,7 @@ static void copy_api_from_app(SequenceControlSet *scs, EbSvtAv1EncConfiguration 
         scs->static_config.intra_period_length =
             (int32_t)(fps * scs->static_config.intra_period_length);
     }
-    if (scs->static_config.intra_period_length == -1)
+    if (scs->static_config.intra_period_length == -1 || scs->allintra)
         scs->static_config.min_intra_period_length = 0;
     else {
         if (scs->static_config.min_intra_period_length == -1)
